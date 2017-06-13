@@ -103,7 +103,7 @@ void resetOtherLine(){
 
 bool checkCommand(char cmd[]){
 
-
+        
 
     resetAnalizer();
 
@@ -155,6 +155,7 @@ bool checkCommand(char cmd[]){
 
 
         }
+        return false;
     }
 
 }
