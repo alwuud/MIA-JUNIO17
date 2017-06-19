@@ -3,7 +3,7 @@
 #include <string.h>
 #include "tad.h"
 #include "comando.h"
-
+#define COMANDOS 5
 
 
 
@@ -12,6 +12,7 @@ char actParam[25]=""; //Esta variable almacena el nombre del parametro actual pa
 int lastToken=-1; //Indice que indica el tipo del ultimo token capturado (funcion real desconocida por ahora)
 int lastCmd=-1; //Indice que establece el comando que se va a ejectura mediante el metodo 'ejecutarComando(indice)
 
+/*lastCmd debe tener el valor de la posicion del comando actual en *comandos[5]*/
 
 char *comandos[5]={"mkdisk", "rmdisk", "fdisk", "mount",
                     "umount"};
@@ -29,7 +30,7 @@ typedef struct crearDisco {//COMANDO 0
 
 } mkdisk;**/
 
-mkdisk nuevo={0,"", "", {"tamanio", "path", "nombre"}, 3};
+mkdisk nuevo={0,"", "", {"size", "path", "name"}, 3};
 
 /**
     char path [100];
@@ -59,7 +60,7 @@ typedef struct particiones{ //COMANDO 2
 }fdisk;*/
 
 fdisk  particion=
-{0, 'K', "",'P', 'W', "",'T',0,{"tamanio","path","nombre"}, {"add", "delete","tipo", "fit"}, 3};
+{0, 'K', "",'P', 'W', "",'T',0,{"size","path","name"}, {"unit", "type", "fit", "delete" , "add"}, 3};
 
 /**
 typedef struct montar{ //COMANDO 3
@@ -74,8 +75,7 @@ mount montar=
 
 
 
-umount desmontar=
-{"", {"id"},};
+umount desmontar= {"", {"id"}, 1};
 
 bool otherLine=false;
 bool fault= false;
@@ -89,16 +89,12 @@ void resetAnalizer(){
     actParam[0]= '\0';
     lastCmd=-1;
     lastToken= -1;
-    resetOtherLine();
-
-
-}
-
-
-void resetOtherLine(){
-    otherLine= false;
+   
+    otherLine=false;
 
 }
+
+
 
 
 bool checkCommand(char cmd[]){
@@ -119,45 +115,228 @@ bool checkCommand(char cmd[]){
 
     /**********Automata**********/
 
-    int i=0;
-    char actual='\0';
+    int i=0; //Variable para recorrer todos los caracteres del comando a ejecutar
+    char actual='\0'; //Auxiliar para analizar el caracter actual que se esta leyendo
+    int cmdLength= strlen(cmd);
 
-
-    for(i=0; cmd[i]!='\0' && i<strlen(cmd); i++ ){
+    for(i=0; cmd[i]!='\0' && i<cmdLength; i++ ){
         actual= cmd[i];
+
         switch(estado){
             case 0:
-                switch(actual){
-                    case '"':
-                        estado=6;
-                    case '-':
-                        estado=2;
-                    case '+':
-                        estado=3;
-                    case '>':
-                        estado=4;
-                    default:
-                        if(actual>= '0' && actual <= '9'){
-                            estado= 1;
-
-                        }
-
-
-
-
+                if(actual>= 'A' && actual <= 'Z'){
+                    actual+=32;
 
                 }
+                switch(actual){
+                    case '$':
+                        estado=2; //En este estado se leen nombres de paramaetros obligatorios
+                        break;
+                    case '@':
+                        estado=7; //En este estado se leen nombres de parametros optativos
+                        break;
+                    default:
+           
+                        
+                        if(actual>= 'a' && actual <= 'z'){
+                            estado=1;
+                            append(actCmd, actual);
+                        }else if( !(actual==9) && !(actual ==32)){
+                            fault=true;
+                        }
+                        break;
+                        
+                }
                 break;
+                
+                
 
 
-            case 1:
-                estado=9;
+            case 1:               
+                if(actual>= 'A' && actual <= 'Z'){
+                    actual+=32;
 
+                }
 
+                if(actual>= 'a' && actual <= 'z'){ 
+                    append(actCmd, actual);
+                }else if(actual==9 || actual==32){
+                    if(guessCmd(actCmd)){
+                        estado= 0;
+                    }else{
+                        fault= true;
+                    }
+                    
+                }else{
+                    fault=true;
+                }
+                break;
+            case 2:
+
+                if(actual>= 'A' && actual <= 'Z'){
+                    actual+=32;
+
+                }
+                
+                if(actual>= 'a' && actual <= 'z'){
+                    append(actParam, actual);
+                    estado=3;
+                }
+                
+                else if( !(actual==9) && !(actual ==32)){
+                    fault =true;
+                    
+                }
+                break;
+            case 3:
+                
+                if(actual>= 'A' && actual <= 'Z'){
+                    actual+=32;
+
+                }                
+                
+                if(actual>= 'a' && actual <= 'z'){
+                    append(actParam, actual);
+                    
+                }else if ( actual==9 || actual==32){
+                    if(guessObParam(actParam)){
+                        estado=4;
+                    }else{
+                        fault=true; 
+                    }
+                    
+                }else if (actual>= '0' && actual<= '9'){
+                    append(actParam, actual);
+                    estado=13;
+                }else if( actual=='='){
+                    if(guessObParam(actParam)){
+                        estado=5;
+                    }else{
+                        fault =true;
+                    }
+                    
+                }else{
+                    fault=true;
+                    
+                }
+                break;
+            case 4:
+                if(actual== "="){
+                    estado=5;
+                }else if (!(actual==9) && !(actual ==32)){
+                    fault= true;
+                    
+                }
+                break;
+            case 5:
+                if(actual ==">"){
+                    estado=6;
+                }else{
+                    fault=true;
+                }
+                break;
+            case 6:
+                if(actual>= '0' && actual<= '9'){
+                    append(token,actual);
+                    estado = 15;
+                    
+                }else if ( actual==34){
+                    estado=9;
+                }else if(actual>= 'a' && actual <= 'z'){
+                    append(token, actual);
+                    estado=11;
+                }else if (!(actual==9) && !(actual ==32)){
+                    fault=true;
+                }
+            case 7:
+                
+                if(actual>= 'A' && actual <= 'Z'){
+                    actual+=32;
+
+                }    
+                
+                if(actual>= 'a' && actual <= 'z'){
+                    append(actParam, actual);
+                    estado=8;
+                    
+                }else if(!(actual==9) && !(actual ==32)){
+                    fault=true;
+                }
+                break;
+            case 8:
+                if(actual>= 'A' && actual <= 'Z'){
+                    actual+=32;
+
+                }                
+                
+                if(actual>= 'a' && actual <= 'z'){
+                    append(actParam, actual);
+                    
+                }else if ( actual==9 || actual==32){
+                    guessParam(actParam);
+                    estado=4;
+                }else if( actual=='='){
+                    guessParam(actParam);
+                    estado=5;
+                }else{
+                    fault=true;
+                    
+                }
+                break;   
+                
+            case 9:
+                
+                if( actual==13 || actual ==10){
+                    fault=true;
+                }else if( actual==33){
+                    setParam(token);
+                }else{
+                    append(token,actual);
+                }
+                break;
+            case 11:
+                if(actual>= 'a' && actual <= 'z'){
+                    append(actParam, actual);
+                    
+                }else if (actual =='_'){
+                    append(actParam, actual);
+                }else if(actual=='.'){
+                    append(actParam,actual);
+                    estado=12;
+                }
+                
+            default:
+                break;
+                
+                       
         }
-        return false;
+        if(fault){
+            resetAnalizer();
+            return false;
+        }
     }
 
+}
+
+
+bool setParam(char param[]){
+    return true;
+}
+
+bool guessObParam(char cmd[]){
+    return true;
+}
+bool guessOpParam(char cmd []){
+    
+    return true;
+}
+
+bool guessCmd(char cmd [] ){
+    int it=0;
+    for(it=0; it< COMANDOS; it++ ){
+        
+    }
+    return true;
 }
 
 void ejecutarComando(int comando){
@@ -177,15 +356,13 @@ void ejecutarComando(int comando){
 
 void crearDisco(){
 
-    printf( "Comando :  %s", nuevo.obligados[2]);
+    printf( "Comando :  %s..", nuevo.obligados[2]);
 
 
 
 }
 
-void toLowerCase(char *cadena){
 
-}
 
 void append (char *cadena, char car){
         int len= strlen(cadena);
